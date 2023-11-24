@@ -12,7 +12,10 @@ Result: TypeAlias = dict[str, str | bool | int]
 
 
 class SecurityChecker():
-    def __init__(self) -> None:
+    DEFAULT_TIMEOUT_IN_SECONDS: int = 30
+    DEFAULT_POOL_SIZE: int = 20
+
+    def __init__(self, timeout_in_seconds: int = DEFAULT_TIMEOUT_IN_SECONDS, pool_size: int = DEFAULT_POOL_SIZE) -> None:
         self.__with_security_file: list[Result] = []
         self.__without_security_file: list[Result] = []
         self.__unknown: list[Result] = []
@@ -36,7 +39,8 @@ class SecurityChecker():
             "Sec-Fetch-Site": "none",
             "Sec-Fetch-User": "?1",
         }
-        self.__request_timeout_in_seconds: int = 30
+        self.__pool_size: int = pool_size if pool_size and pool_size > 0 else SecurityChecker.DEFAULT_POOL_SIZE
+        self.__request_timeout_in_seconds: int = timeout_in_seconds if timeout_in_seconds and timeout_in_seconds > 0 else SecurityChecker.DEFAULT_TIMEOUT_IN_SECONDS
         self.__https_scheme: str = "https://"
 
     def __get_pwned_domains(self) -> list[PwnedDomain]:
@@ -140,11 +144,11 @@ class SecurityChecker():
         # Get all domain names as strings, then filter out those that are empty strings, then remove duplicates.
         pwned_domains: set[str] = set(filter(lambda domain: len(domain) > 0, map(lambda data: cast(str, data["Domain"]), pwned_domains_data)))
 
-        pool: Pool = Pool(processes=20)
+        pool: Pool = Pool(processes=self.__pool_size)
         results: list[Result] = pool.map(func=self.check_for_security_file, iterable=pwned_domains)
 
         self.__classify_results(results=results)
-        self.__store_results()  
+        self.__store_results()
 
 
 if __name__ == "__main__":
