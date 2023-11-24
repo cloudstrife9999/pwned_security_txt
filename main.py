@@ -4,6 +4,7 @@ from multiprocessing.pool import Pool
 from requests import get, Response
 from json import dump
 from typing import cast, TypeAlias
+from re import match, compile, Pattern
 
 
 DataClasses: TypeAlias = dict[int, str]
@@ -26,7 +27,7 @@ class SecurityChecker():
             "content_is_valid_security_file": False,
             "content_type_header": "",
             "compliant_content_type_header": False,
-            "suboptimal_content_type_header": False,
+            "almost_compliant_content_type_header": False,
             "scheme": "",
             "verified_certificate": False,
         }
@@ -42,6 +43,8 @@ class SecurityChecker():
         self.__pool_size: int = pool_size if pool_size and pool_size > 0 else SecurityChecker.DEFAULT_POOL_SIZE
         self.__request_timeout_in_seconds: int = timeout_in_seconds if timeout_in_seconds and timeout_in_seconds > 0 else SecurityChecker.DEFAULT_TIMEOUT_IN_SECONDS
         self.__https_scheme: str = "https://"
+        self.__compliant_content_type_header_regex: Pattern[str] = compile("^text/plain;\\s*charset=(utf\\-8|UTF\\-8)")
+        self.__almost_compliant_content_type_header_regex: Pattern[str] = compile("^text/plain;?")
 
     def __get_pwned_domains(self) -> list[PwnedDomain]:
         try:
@@ -87,8 +90,8 @@ class SecurityChecker():
         response_template["scheme"] = scheme
         response_template["verified_certificate"] = verify
         response_template["content_type_header"] = response.headers["content-type"] if "content-type" in response.headers else "N/A"
-        response_template["compliant_content_type_header"] = "content-type" in response.headers and str(response.headers["content-type"]).rstrip().replace("\n", "").replace("\r", "") == "text/plain; charset=utf-8"
-        response_template["suboptimal_content_type_header"] = "content-type" in response.headers and str(response.headers["content-type"]).rstrip().replace("\n", "").replace("\r", "") == "text/plain"
+        response_template["compliant_content_type_header"] = self.__is_content_type_header_compliant(response=response)
+        response_template["almost_compliant_content_type_header"] = not response_template["compliant_content_type_header"] and self.__is_content_type_header_almost_compliant(response=response)
 
         if response.status_code == 404:
             response_template["security_file_explicitly_not_found"] = True
@@ -96,6 +99,21 @@ class SecurityChecker():
             response_template["content_is_valid_security_file"] = self.__validate_security_file_content(response=response)
 
         return response_template
+
+    def __is_content_type_header_compliant(self, response: Response) -> bool:
+        return SecurityChecker.__check_content_type_header_pattern(response=response, pattern=self.__compliant_content_type_header_regex)
+
+    def __is_content_type_header_almost_compliant(self, response: Response) -> bool:
+        return SecurityChecker.__check_content_type_header_pattern(response=response, pattern=self.__almost_compliant_content_type_header_regex)
+
+    @staticmethod
+    def __check_content_type_header_pattern(response: Response, pattern: Pattern[str]) -> bool:
+        if "content-type" not in response.headers:
+            return False
+        else:
+            content_type_header: str = str(response.headers["content-type"]).replace("\n", "").replace("\r", "").rstrip()
+
+            return match(pattern, content_type_header) is not None
 
     def __validate_security_file_content(self, response: Response) -> bool:
         lines: list[str] = [line.strip() for line in response.text.replace("\n\r", "\n").replace("\r", "\n").split("\n")]

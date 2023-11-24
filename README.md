@@ -8,17 +8,24 @@ See <https://twitter.com/troyhunt/status/1682982538409828354>.
 
 ## How to run the script
 
+### unix systems (GNU/Linux, macOS, etc.)
+
 ```bash
-user@machine ~ $ chmod 700 main.py
-user@machine ~ $ ./main.py
+chmod 700 main.py
+./main.py
+```
+
+### MS Windows
+
+```powershell
+python.exe main.py
 ```
 
 ## Goals
 
 * To check whether pwned websites have `security.txt` file in the `.well-known` directory.
-* To check whether the aforementioned `security.txt` file contains a line including `Contact:\s*<valid_contact>` (or `Contact\s+<valid_contact>`).
-* To check whether the response containing the aforementioned `security.txt` file has a `Content-Type: text/plain; charset=utf-8` header.
-* Alternatively, to check whether the response containing the aforementioned `security.txt` file has a `Content-Type: text/plain` header.
+* To check whether the aforementioned `security.txt` file contains a line including (illustrated here in pseudo-regex format) `Contact:\s*<valid_contact>` (or `Contact\s+<valid_contact>`).
+* To check whether the response containing the aforementioned `security.txt` file has a compliant (or almost compliant) `Content-Type` header.
 
 ## Methodology
 
@@ -43,8 +50,8 @@ self.__request_headers: dict[str, str] = {
 * If a request fails again, we try with plain HTTP. We allow redirects.
 * If at least one of the above requests succeeds, we get the response code, the response body, and the `Content-Type` header.
 * Depending on the response code, we either check or not the response body.
-* If the response code is `200`, we check the response body for a line including `Contact:\s*<valid_contact>` (or `Contact\s+<valid_contact>`).
-* If the request did not fail, we also check whether the `Content-Type` header is compliant with the specification (i.e., `text/plain; charset=utf-8`), or at the very least the suboptimal `text/plain`. If the header is not present, we consider it both non-compliant and suboptimal.
+* If the response code is `200`, we check the response body for a line including (illustrated here in pseudo-regex format) `Contact:\s*<valid_contact>` (or `Contact\s+<valid_contact>`).
+* If the request did not fail, we also check whether the `Content-Type` header is compliant with the specification (i.e., matching `compile("^text/plain;\\s*charset=(utf\\-8|UTF\\-8)")`), or at the very least almost compliant (i.e., matching `compile("^text/plain;?")`). If the header is not present, we consider it both non-compliant and non-almost-compliant.
 * Depending on the response code, response body, and `Content-Type` header, we either consider the website to have a valid `security.txt` file, or not, or we explicitly say we don't know.
 
 ## How to interpret the results
@@ -57,10 +64,15 @@ self.__request_headers: dict[str, str] = {
 
 * Regardless of which file a domain ends up in, we also record the scheme used for the successul request or the last attempted fallback (i.e., `https://` or `http://`), and whether the server certificate was validated (i.e., `True` or `False`), and also the `Content-Type` header. If it is not present or the request timed out, we record `N/A`.
 
-* If a domain name is listed in `with_security_file.json` or `without_security_file.json`, we also record whether the `Content-Type` header is compliant with the specification (i.e., `text/plain; charset=utf-8`), or at the very least the suboptimal `text/plain`. If the header is not present, we consider it both non-compliant and suboptimal.
+* If a domain name is listed in `with_security_file.json` or `without_security_file.json`, we also record whether the `Content-Type` header is compliant with the specification (i.e., matching `compile("^text/plain;\\s*charset=(utf\\-8|UTF\\-8)")`), or at the very least almost compliant (i.e., matching `compile("^text/plain;?")`). If the header is not present, we consider it both non-compliant and non-almost-compliant.
 
 ## Acknowledgements
 
 * [Troy](https://www.troyhunt.com) [Hunt](https://twitter.com/troyhunt) for the idea.
 * [Have I Been Pwned](https://haveibeenpwned.com/) for the pwned domains data.
 * [The creators](https://securitytxt.org/) of the `security.txt` specification.
+
+## Future work
+
+* Validate the contact information in a non-trivial way.
+* Extend the project to check for the best web security and transport security practices.
